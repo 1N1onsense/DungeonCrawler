@@ -1,4 +1,4 @@
-// TODO: Armor, Items and Shield
+// TODO: Clothing,
 // TODO: Battle Logic
 // TODO: Dungeon Exploration
 
@@ -15,15 +15,13 @@
     #include <ncurses.h> // standard on Linux/macOS
 #endif
 
+#define MAX_INVENTORY_SLOTS 5
+
 /* Because Weapon needs unit and unit needs weapon, 
 this ensures the compiler is quiet;*/
 typedef struct Unit Unit; 
 
 // Structures:
-
-typedef struct Item {
-    void (*ItemEffect) (Unit*, Unit*);
-} Item;
 
 typedef enum {
     OFFHAND_NONE = 0,
@@ -32,14 +30,27 @@ typedef enum {
 } OffhandType;
 
 typedef struct Weapon {
-    char Name[32];
+    char Name[18]; 
     unsigned short int Type : 3; //0 = Unused for Now, 1 = Light, 2 = Versatile, 3 = Heavy, 4 = Breaker, 5 = Projectile, 6 = Firearm, 7 = Loaded;]
     unsigned int DamageType : 2; //0 = Physical, 1 = Magical. 2 or 3 means the weapon is mixed and can choose wheter to do physical or magical;
-    char AmmoType[10]; //If the weapon type is 5 or above (consumes ammo), this is the name of the type of ammo it consumes, which will be used for comparisons;
+    char AmmoType[18]; //If the weapon type is 5 or above (consumes ammo), this is the name of the type of ammo it consumes, which will be used for comparisons;
     short int StatBonus; //As long as it is not offhand, grants a bonus to Atk (if damagetype is 0) or Mag (if Damagetype is 1);
     //If mixed, tries to assign equally, but gives priority to granting the bigger part to Atk if 2 or Mag if 3;
+    short int AmmoCapacity; //Determines how many shots the weapon can give before reloading if ranged
+    short int CurrentAmmo;//Determines how much ammo the weapon currently has loaded
     void (*SpecialEffect) (Unit*, Unit*);
 } Weapon;
+//Dummy Weapon Prototype
+Weapon Dummy = {
+    .Name = "S.S Strong Dummy!",
+    .Type = 1,
+    .DamageType = 0,
+    .AmmoType = "\0",
+    .StatBonus = 5,
+    .AmmoCapacity = 8,
+    .CurrentAmmo = 6,
+    .SpecialEffect = NULL
+};
 
 typedef struct Shield {
     unsigned int Type : 3; //000(0) L.Shield, 001(1) L.Barrier 010(2) M.Shield, 011(3) M.Barrier, 100(4) H.Shield, 101(5) H.Barrier;
@@ -55,11 +66,48 @@ typedef struct Offhand {
     };
 } Offhand;
 
+typedef struct Item {
+    char Name[20];
+    short int Potency;
+    short int Weight;
+    short int Amount;
+    void (*Effect) (Unit*, Unit*);
+} Item;
+
+typedef struct Clothing {
+    char Name[18];
+    unsigned int Type : 3; //0 = No Clothing, 1 = Light, 2 = Medium, 3 = Heavy, 4 = Ceremonial;
+    short int StatBonus; //Like the weapon bonus
+    unsigned int DefenseType : 2; //Determines if the statbonus will go to 0 = Def, 1 = Res, 2 = Fort.
+    void (*SpecialEffect) (Unit*, Unit*);
+} Clothing;
+
+//Dummy Clothing Prototype. ERASE LATER
+Clothing DummyPlate = {
+    .Name = "Ultra Dummy",
+    .Type = 1,
+    .StatBonus = 5,
+    .DefenseType = 0,
+    .SpecialEffect = NULL
+};
+
 typedef struct Unit {
     char Name[32];
-    int HP; //During battles, HP will be normally counted as 3*Fort, save circumstances.
-    int Armor; //Armor is normally Def*2 unless the user is wearing [F.Plate] armor
-    int Ward; //Ward is normally Res*2 unless the user is wearing [Ceremonial] armor
+
+    int HP;
+    int Armor;
+    int Ward;
+
+    //Current values for those ints above
+    int CurrentHP;
+    int CurrentArmor;
+    int CurrentWard;
+
+    //Unit's Inventory
+    Item *Inventory[MAX_INVENTORY_SLOTS];
+    short int InventoryMaxCapacity;
+    short int InventoryWeight; //Raises when item is added, loses when consumed or tossed
+
     short int Attack;
     short int Magic;
     short int Fortitude;
@@ -67,6 +115,7 @@ typedef struct Unit {
     short int Resistance;
     short int Speed;
     Weapon *EquippedWeapon;
+    Clothing *EquippedClothing;
     Offhand EquippedOffhand;
     void (*Passive) (Unit*, Unit*);
 } Unit;
@@ -83,6 +132,16 @@ short int OverflowControlShort (int V) {
     return (short int) V;
 }
 
+int OverflowControlFlexible (int V, int Max, int Min) {
+    if (V > Max) {
+        V = Max;
+    }
+    else if (V < Min) {
+        V = Min;
+    }
+    return  V;
+}
+
 int MultiplesOfFive (int V, int FlagX) {
     //0 -> Rounds up
     //1 -> Rounds down
@@ -95,6 +154,44 @@ int MultiplesOfFive (int V, int FlagX) {
         default:
             return((V + 2) / 5) * 5;
     }
+}
+
+void RefreshUnitDefensiveStats(Unit *U) {
+    U->HP = 3*(U->Fortitude); if (U->CurrentHP > U->HP) U->CurrentHP = U->HP;
+    U->Armor = 2*(U->Defense); if (U->CurrentArmor > U->Armor) U->CurrentArmor = U->Armor;
+    U->Ward = 2*(U->Resistance); if (U->CurrentWard > U->Ward) U->CurrentWard = U->Ward;
+}
+
+void EquipUnequipClothing(Unit *U, Clothing* Cloth, int Command) {
+    switch (Command) {
+        //Unequipping Clothing, always run before equipping each new clothing
+        case 0:
+            RefreshUnitDefensiveStats(U);
+            U->EquippedClothing = NULL;
+            break;
+        //Equipping Clothing
+        case 1:
+            U->EquippedClothing = Cloth;
+            //I should use an ENUM here
+            //0 = No Clothing, 1 = Light, 2 = Medium, 3 = Full Plate, 4 = Ceremonial;
+            //0 = Def, 1 = Res, 2 = Fort.
+            switch (Cloth->Type) {
+                //If Full Plate or Ceremonial
+                case 3: U->Armor = 3*(U->Defense + Cloth->StatBonus); break;
+                case 4: U->Ward = 3* (U->Resistance + Cloth->StatBonus); break;
+                default:
+                //if Anything else
+                    switch (Cloth->DefenseType) {
+                        case 0: U->Armor = (Cloth->StatBonus + U->Defense)*2; break;
+                        case 1: U->Ward = (Cloth->StatBonus + U->Resistance)*2; break;
+                        case 2: U->HP = (Cloth->StatBonus + U->Fortitude)*3; break;
+                    }
+                    break;
+            }
+            break;
+    }
+    U->CurrentArmor = U->Armor;
+    U->CurrentWard = U->Ward;
 }
 
 Unit CreateUnit(char *Name,
@@ -113,37 +210,154 @@ short int Resistance,short int Speed, Weapon *InitWeapon, void (*Passive)(Unit*,
     NewUnit.Armor = Defense * 2;   // Default rule (can be overwritten by F.Plate later)
     NewUnit.Ward = Resistance * 2; // Default rule (can be overwritten by Ceremonial later)
     
+    NewUnit.CurrentHP = NewUnit.HP;
+    NewUnit.CurrentArmor = NewUnit.Armor;
+    NewUnit.CurrentWard = NewUnit.Ward;
+
     // Equipment Bindings
     NewUnit.EquippedWeapon = InitWeapon;
     NewUnit.EquippedOffhand.SlotType = OFFHAND_NONE;
     NewUnit.EquippedOffhand.Weapon = NULL;
+    NewUnit.EquippedClothing = NULL;
     
+    NewUnit.InventoryMaxCapacity = 50; //Default weight of things should be around 10, Ammo much lighter
+    for (int i = 0; i < MAX_INVENTORY_SLOTS; i++) {
+        NewUnit.Inventory[i] = NULL;
+    };
+
     //Passive
     NewUnit.Passive = Passive;
     return NewUnit;
 }
 
+int StatBuffs(Unit *U, int Control) {
+    switch (Control) {
+        // Checks if weapon is physical
+        case 0:
+            if (U->EquippedWeapon != NULL && (U->EquippedWeapon->DamageType == 0 || U->EquippedWeapon->DamageType == 2)) {
+                return U->Attack + U->EquippedWeapon->StatBonus;
+            }
+            return U->Attack;
+            
+        // Checks if weapon is magical
+        case 1:
+            if (U->EquippedWeapon != NULL && (U->EquippedWeapon->DamageType == 1 || U->EquippedWeapon->DamageType == 3)) {
+                return U->Magic + U->EquippedWeapon->StatBonus;
+            }
+            return U->Magic;
+            
+        // Checks if Armor is Physical
+        case 2:
+            if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 0) {
+                return U->Defense + U->EquippedClothing->StatBonus;
+            }
+            return U->Defense;
+            
+        // Checks if Clothing is Magical
+        case 3:
+            if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 1) {
+                return U->Resistance + U->EquippedClothing->StatBonus;
+            }
+            return U->Resistance;
+            
+        // Checks if Clothing is Fort
+        case 4:
+            if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 2) {
+                return U->Fortitude + U->EquippedClothing->StatBonus;
+            }
+            return U->Fortitude;
+    }
+    return 0;
+}
+
 // Debug and Formatting Functions
 
-void PrintUnitStats(WINDOW *win, Unit U, const char **StatNames) {
+void PrintUnitStats(WINDOW *win, Unit *U, const char **StatNames) {
     wclear(win); 
     box(win, 0, 0); 
     short int L = 0;
-    short int M = 0;
+    short int M = -1;
     
-    mvwprintw(win, 2, 2, "============================================================================");
-    mvwprintw(win, 3, 2, "%s's Stats: %s", U.Name);
-    mvwprintw(win, 5+M, 2, "HP    : %d/%d", U.HP, U.HP); M++;
-    mvwprintw(win, 5+M, 2, "Armor : %d/%d", U.Armor, U.Armor); M++;
-    mvwprintw(win, 5+M, 2, "Ward  : %d/%d", U.Armor, U.Armor); M++;
-    mvwprintw(win, 5+M, 2, "             ", U.Armor, U.Armor); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Attack); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Magic); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Fortitude); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Defense); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Resistance); M++;
-    mvwprintw(win, 5+M, 2, "[%-5s] %d", StatNames[L++], U.Speed); M++;
-    mvwprintw(win, 5+M, 2, "============================================================================");
+    mvwprintw(win, 2+M, 2, "%s's Stats:", U->Name);
+    mvwprintw(win, 5+M, 2, "HP    : %d/%d", U->CurrentHP, U->HP); M++;
+    mvwprintw(win, 5+M, 2, "Armor : %d/%d", U->CurrentArmor, U->Armor); M++;
+    mvwprintw(win, 5+M, 2, "Ward  : %d/%d", U->CurrentWard, U->Ward); M++;
+    mvwprintw(win, 5+M, 2, "             "); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Attack, StatBuffs(U, 0)); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Magic, StatBuffs(U, 1)); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Fortitude, StatBuffs(U, 4)); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Defense, StatBuffs(U, 2)); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Resistance, StatBuffs(U, 3)); M++;
+    mvwprintw(win, 5+M, 2, "[%-5s] %d (%d)", StatNames[L++], U->Speed, U->Speed); M++; //Placeholder
+    //Printing on right side now
+    L = M;
+    M = -2;
+    //Printing Weapon
+    if (U->EquippedWeapon == NULL) {
+        mvwprintw(win, 5+M, 50, "Weapon    : No Weapon"); M = M + 9;
+    } else {
+        mvwprintw(win, 5+M, 50, "Weapon    : %s", (U->EquippedWeapon)->Name); M++;
+        switch ((U->EquippedWeapon)->Type) {
+            case 0: mvwprintw(win, 5+M, 50, "If you're seeing this, I fucked up."); M++; break;
+            case 1: mvwprintw(win, 5+M, 50, "Type      : Light"); M++; break;
+            case 2: mvwprintw(win, 5+M, 50, "Type      : Versatile"); M++; break;
+            case 3: mvwprintw(win, 5+M, 50, "Type      : Heavy"); M++; break;
+            case 4: mvwprintw(win, 5+M, 50, "Type      : Breaker"); M++; break;
+            case 5: mvwprintw(win, 5+M, 50, "Type      : Projectile"); M++; break;
+            case 6: mvwprintw(win, 5+M, 50, "Type      : Firearm"); M++; break;
+            case 7: mvwprintw(win, 5+M, 50, "Type      : Loaded"); M++; break;
+        }
+        //0 = Physical, 1 = Magical. 2 or 3 means the weapon is mixed and can choose wheter to do physical or magical;
+        switch (U->EquippedWeapon->DamageType) {
+            case 0: mvwprintw(win, 5+M, 50, "Bonus     : %+d Atk", (U->EquippedWeapon)->StatBonus); M++; break;
+            case 1: mvwprintw(win, 5+M, 50, "Bonus     : %+d Mag", (U->EquippedWeapon)->StatBonus); M++; break;
+            case 2: mvwprintw(win, 5+M, 50, "Bonus     : %+d Atk (Mixed)", (U->EquippedWeapon)->StatBonus); M++; break;
+            case 3: mvwprintw(win, 5+M, 50, "Bonus     : %+d Mag (Mixed)", (U->EquippedWeapon)->StatBonus); M++; break;
+        }
+        //Only cares about ammo if type is the ranged thresold
+        if ((U->EquippedWeapon)->AmmoType[0] != '\0') {
+            mvwprintw(win, 5+M, 50, "Ranged Weapon"); M++;
+            mvwprintw(win, 5+M, 50, "Ammo Type : %s", U->EquippedWeapon->AmmoType); M++;
+            for (int i = 0; i < MAX_INVENTORY_SLOTS; i++) {
+                if (U->Inventory[i] != NULL) {
+                    if (strcmp((U->Inventory[i])->Name, U->EquippedWeapon->AmmoType) == 0) {
+                        mvwprintw(win, 5+M, 50, "Ammo Left : %d/%d;", U->EquippedWeapon->CurrentAmmo, U->Inventory[i]->Amount); M++;
+                        break;
+                    } 
+                    else if ((i == MAX_INVENTORY_SLOTS-1)) {
+                    mvwprintw(win, 5+M, 50, "Ammo Left : %d/0", U->EquippedWeapon->CurrentAmmo); M++;
+                    }
+                }
+                else if ((i == MAX_INVENTORY_SLOTS-1)) {
+                    mvwprintw(win, 5+M, 50, "Ammo Left : %d/0", U->EquippedWeapon->CurrentAmmo); M++;
+                }
+            }
+        } else {
+            mvwprintw(win, 5+M, 50, "Melee Weapon"); M = M + 3;
+        }
+    }
+    M++; //Line buffer
+    //Printing Clothing
+    if (U->EquippedClothing == NULL) {
+        mvwprintw(win, 5+M, 50, "Clothing  : No Clothing"); M = M + 9;
+    } else {
+        mvwprintw(win, 5+M, 50, "Clothing  : %s", (U->EquippedClothing)->Name); M++;
+        switch ((U->EquippedClothing)->Type) {
+            //0 = No Clothing, 1 = Light, 2 = Medium, 3 = Full Plate, 4 = Ceremonial;
+            case 0: mvwprintw(win, 5+M, 50, "                        "); M++; break;
+            case 1: mvwprintw(win, 5+M, 50, "Type      : Light Clothing"); M++; break;
+            case 2: mvwprintw(win, 5+M, 50, "Type      : Medium Clothing"); M++; break;
+            case 3: mvwprintw(win, 5+M, 50, "Type      : Full Plate"); M++; break;
+            case 4: mvwprintw(win, 5+M, 50, "Type      : Ceremonial"); M++; break;
+            default: break;
+        }
+        switch (U->EquippedClothing->DefenseType) {
+            case 0: mvwprintw(win, 5+M, 50, "Bonus     : %+d Def", (U->EquippedClothing)->StatBonus); M++; break;
+            case 1: mvwprintw(win, 5+M, 50, "Bonus     : %+d Res", (U->EquippedClothing)->StatBonus); M++; break;
+            case 2: mvwprintw(win, 5+M, 50, "Bonus     : %+d Fort", (U->EquippedClothing)->StatBonus); M++; break;
+            default: break;
+        }
+    }
     wrefresh(win);
 }
 
@@ -194,7 +408,7 @@ void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
             mvwprintw(win, 8 + i, 32, "[%-4s] %2d", StatNames[i], Stats[i]);
         }
         
-        mvwprintw(win, 18, 26, "- Press Enter to Continue -");
+        mvwprintw(win, 18, 26, "- Press Any Key to Continue -");
         wrefresh(win);
         
         int ch = wgetch(win);
@@ -334,13 +548,17 @@ int main()
 
     // Create and Print Final Unit
     Unit Player = CreateUnit(Name, Stats[0], Stats[1], Stats[2], Stats[3], Stats[4], Stats[5], NULL, NULL);
-    PrintUnitStats(win, Player, StatNames);
+    //Debug for weapon
+    Player.EquippedWeapon = &Dummy;
+    EquipUnequipClothing(&Player, &DummyPlate, 0);
+    EquipUnequipClothing(&Player, &DummyPlate, 1);
+    PrintUnitStats(win, &Player, StatNames);
     
-    mvwprintw(win, 14, 2, "Press any key to close.");
+    mvwprintw(win, 0, 24, "- Press Any Key to Continue -");
     wrefresh(win);
     
-    wgetch(win); // Waits for keypress
+    wgetch(win);
     
-    endwin(); // Destroys visual allocations safely back to shell context
+    endwin();
     return 0;
 }
