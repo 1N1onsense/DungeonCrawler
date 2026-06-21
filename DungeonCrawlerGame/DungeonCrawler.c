@@ -1,6 +1,6 @@
-// TODO: Battle Logic
-// More specifically, finish ALLY and ENEMY turn
-// TODO: Dungeon Exploration
+//TODO: Battle Logic
+//More specifically, finish ALLY and ENEMY turn
+//TODO: Dungeon Exploration
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,11 +8,11 @@
 #include <ctype.h>
 
 #define NCURSES_STATIC
-// Compiles with -lpdcurses on Windows and -lncurses with everything else
+//Compiles with -lpdcurses on Windows and -lncurses with everything else
 #ifdef _WIN32
     #include <ncurses/curses.h>
 #else
-    #include <ncurses.h> // standard on Linux/macOS
+    #include <ncurses.h> //standard on Linux/macOS
 #endif
 
 #define MAX_INVENTORY_SLOTS 5
@@ -21,7 +21,7 @@
 this ensures the compiler is quiet;*/
 typedef struct Unit Unit; 
 
-// Structures:
+//Structures:
 
 //The engine will only support a maximum of 4 members of each side
 typedef struct Group {
@@ -132,7 +132,7 @@ typedef struct Unit {
     short int StatusEffect;
 } Unit;
 
-// Main Engine functions:
+//Main Engine functions:
 
 short int OverflowControlShort (int V) {
     if (V > 10000) {
@@ -219,14 +219,14 @@ short int Resistance,short int Speed, Weapon *InitWeapon, unsigned char IsAlly, 
     NewUnit.Speed = Speed;
 
     NewUnit.HP = Fortitude * 3;
-    NewUnit.Armor = Defense * 2;   // Default rule (can be overwritten by F.Plate later)
-    NewUnit.Ward = Resistance * 2; // Default rule (can be overwritten by Ceremonial later)
+    NewUnit.Armor = Defense * 2;   //Default rule (can be overwritten by F.Plate later)
+    NewUnit.Ward = Resistance * 2; //Default rule (can be overwritten by Ceremonial later)
     
     NewUnit.CurrentHP = NewUnit.HP;
     NewUnit.CurrentArmor = NewUnit.Armor;
     NewUnit.CurrentWard = NewUnit.Ward;
 
-    // Equipment Bindings
+    //Equipment Bindings
     NewUnit.EquippedWeapon = InitWeapon;
     NewUnit.EquippedOffhand.SlotType = OFFHAND_NONE;
     NewUnit.EquippedOffhand.Weapon = NULL;
@@ -246,35 +246,35 @@ short int Resistance,short int Speed, Weapon *InitWeapon, unsigned char IsAlly, 
 
 int StatBuffs(Unit *U, int Control) {
     switch (Control) {
-        // Checks if weapon is physical
+        //Checks if weapon is physical
         case 0:
             if (U->EquippedWeapon != NULL && (U->EquippedWeapon->DamageType == 0 || U->EquippedWeapon->DamageType == 2)) {
                 return U->Attack + U->EquippedWeapon->StatBonus;
             }
             return U->Attack;
             
-        // Checks if weapon is magical
+        //Checks if weapon is magical
         case 1:
             if (U->EquippedWeapon != NULL && (U->EquippedWeapon->DamageType == 1 || U->EquippedWeapon->DamageType == 3)) {
                 return U->Magic + U->EquippedWeapon->StatBonus;
             }
             return U->Magic;
             
-        // Checks if Armor is Physical
+        //Checks if Armor is Physical
         case 2:
             if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 0) {
                 return U->Defense + U->EquippedClothing->StatBonus;
             }
             return U->Defense;
             
-        // Checks if Clothing is Magical
+        //Checks if Clothing is Magical
         case 3:
             if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 1) {
                 return U->Resistance + U->EquippedClothing->StatBonus;
             }
             return U->Resistance;
             
-        // Checks if Clothing is Fort
+        //Checks if Clothing is Fort
         case 4:
             if (U->EquippedClothing != NULL && U->EquippedClothing->DefenseType == 2) {
                 return U->Fortitude + U->EquippedClothing->StatBonus;
@@ -284,7 +284,7 @@ int StatBuffs(Unit *U, int Control) {
     return 0;
 }
 
-    //IMPORTANT: Main Battle Function!
+    //IMPORTANT: Main Battle Functions!
 
 void InitiativeSort(Group* Allies, Group *Enemies, Unit **Initiative) {
     unsigned char InitCount = 0;
@@ -322,7 +322,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
         IsBreaker = 1;
     }
 
-    // (0 = Physical, 1 = Magical)
+    //(0 = Physical, 1 = Magical)
     if (BlowType == 0) {
         BaseDamage = StatBuffs(User, 0); 
     } else {
@@ -336,7 +336,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
             Unit *T = TargetGroup->Units[IdxTargets[i]];
             if (T != NULL && T->CurrentHP > 0) {
                 ValidTargetCount++;
-                OnlyTarget = T; // Will hold the target if it ends up being just one
+                OnlyTarget = T; //Will hold the target if it ends up being just one
             }
         }
     }
@@ -349,7 +349,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
         }
     }
 
-    // Start printing messages at Row 4
+    //Start printing messages at Row 4
     int PrintRow = 4; 
 
     //Cleaning message area
@@ -368,7 +368,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
         Unit *Target = TargetGroup->Units[IdxTargets[i]];
         if (Target == NULL || Target->CurrentHP <= 0) continue; 
 
-        // Set the amount of times the damage loop will run for this target
+        //Set the amount of times the damage loop will run for this target
         int TargetHits = IsDoubleHit ? 2 : 1;
 
         for (int hit = 0; hit < TargetHits; hit++) {
@@ -378,7 +378,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
             unsigned char BrokeArmor = 0;
             unsigned char BrokeWard = 0;
 
-            // Apply Physical Damage
+            //Apply Physical Damage
             if (BlowType == 0) { 
                 if (Target->CurrentArmor > 0) {
                     Target->CurrentArmor -= BaseDamage;
@@ -395,7 +395,7 @@ unsigned char ApplyDamage(Unit* User, short int IdxTargets[4], Group *UserGroup,
                     Target->CurrentHP -= BaseDamage;
                 }
             } 
-            // Apply Magical Damage
+            //Apply Magical Damage
             else { 
                 if (Target->CurrentWard > 0) {
                     Target->CurrentWard -= BaseDamage;
@@ -453,7 +453,7 @@ void DrawBattlePanels(WINDOW *win, Group *Allies, Group *Enemies, Unit *ActiveUn
     }
 
     //Loop through Allies (Left Panel - Text starts at X = 2)
-    int YOffset = 2; // Matches row 3 on your blueprint layout
+    int YOffset = 2; //Matches row 3 on your blueprint layout
     for (int i = 0; i < 4; i++) {
         //Only draws if unit slot exists in group
         if (i < Allies->AmountUnits && Allies->Units[i] != NULL) {
@@ -528,35 +528,35 @@ void SelectTargetUI(WINDOW *win, Group *TargetGroup, int StrikeType, short int R
     int Cursor = 0;
     unsigned char ActionChosen = 0;
     
-    // Determine maximum possible targets (Primary + Extra AoE targets)
+    //Determine maximum possible targets (Primary + Extra AoE targets)
     int MaxTargets = 1 + StrikeType; 
     if (MaxTargets > 4) MaxTargets = 4;
 
-    // 1. Initialize all output results to -1 (Empty)
+    //1. Initialize all output results to -1 (Empty)
     for (int i = 0; i < 4; i++) {
         ResultTargets[i] = -1;
     }
 
-    // 2. Find the first valid (alive) unit to place the cursor initially
+    //2. Find the first valid (alive) unit to place the cursor initially
     while (Cursor < 4 && (TargetGroup->Units[Cursor] == NULL || TargetGroup->Units[Cursor]->CurrentHP <= 0)) {
         Cursor++;
     }
     
-    // Safety check: If no targets are alive, exit immediately
+    //Safety check: If no targets are alive, exit immediately
     if (Cursor == 4) return; 
 
     while (!ActionChosen) {
-        // Temporary array to hold the indices of units that will be hit this frame
+        //Temporary array to hold the indices of units that will be hit this frame
         int HitIndices[4] = {-1, -1, -1, -1};
         int HitCount = 0;
         
-        // Assign the primary target the user is hovering over
+        //Assign the primary target the user is hovering over
         HitIndices[HitCount++] = Cursor;
 
-        // If it's an AoE (StrikeType > 0), grab the next available alive units in the group
+        //If it's an AoE (StrikeType > 0), grab the next available alive units in the group
         if (StrikeType > 0) {
             for (int i = 0; i < 4 && HitCount < MaxTargets; i++) {
-                // Skip the primary target, empty slots, and fallen units
+                //Skip the primary target, empty slots, and fallen units
                 if (i != Cursor && TargetGroup->Units[i] != NULL && TargetGroup->Units[i]->CurrentHP > 0) {
                     HitIndices[HitCount++] = i;
                 }
@@ -569,13 +569,13 @@ void SelectTargetUI(WINDOW *win, Group *TargetGroup, int StrikeType, short int R
 
         mvwprintw(win, 8, 24, "SELECT TARGET:");
         
-        // Print the units that will be hit by this attack
+        //Print the units that will be hit by this attack
         for (int i = 0; i < HitCount; i++) {
             if (i == 0) {
-                // Primary target gets the cursor arrow
+                //Primary target gets the cursor arrow
                 mvwprintw(win, 10 + i, 24, "---> [%-12s]", TargetGroup->Units[HitIndices[i]]->Name);
             } else {
-                // Splash targets get a plus indicator
+                //Splash targets get a plus indicator
                 mvwprintw(win, 10 + i, 24, "  +  [%-12s]", TargetGroup->Units[HitIndices[i]]->Name);
             }
         }
@@ -583,28 +583,28 @@ void SelectTargetUI(WINDOW *win, Group *TargetGroup, int StrikeType, short int R
         mvwprintw(win, 15, 23, "ENTER: Hit | BACKSPACE: Back");
         wrefresh(win);
 
-        // Inputs
+        //Inputs
         int ch = wgetch(win);
         switch (ch) {
             case 's': case 'S': case KEY_DOWN:
-                // Move cursor to the NEXT alive unit
+                //Move cursor to the NEXT alive unit
                 do {
                     Cursor++;
-                    if (Cursor > 3) Cursor = 0; // Wrap around to the top
+                    if (Cursor > 3) Cursor = 0; //Wrap around to the top
                 } while (TargetGroup->Units[Cursor] == NULL || TargetGroup->Units[Cursor]->CurrentHP <= 0);
                 break;
 
             case 'w': case 'W': case KEY_UP:
-                // Move cursor to the PREVIOUS alive unit
+                //Move cursor to the PREVIOUS alive unit
                 do {
                     Cursor--;
-                    if (Cursor < 0) Cursor = 3; // Wrap around to the bottom
+                    if (Cursor < 0) Cursor = 3; //Wrap around to the bottom
                 } while (TargetGroup->Units[Cursor] == NULL || TargetGroup->Units[Cursor]->CurrentHP <= 0);
                 break;
 
             case 'd': case 'D': case KEY_ENTER: case '\n': 
             case 13:
-                // Confirm selection: Lock in the HitIndices into the ResultTargets array
+                //Confirm selection: Lock in the HitIndices into the ResultTargets array
                 for (int i = 0; i < 4; i++) {
                     ResultTargets[i] = HitIndices[i];
                 }
@@ -612,7 +612,7 @@ void SelectTargetUI(WINDOW *win, Group *TargetGroup, int StrikeType, short int R
                 break;
 
             case 'a': case 'A': case KEY_LEFT: case KEY_BACKSPACE: case 8: case 127:
-                // Cancel selection: ActionChosen triggers the exit, ResultTargets remains -1
+                //Cancel selection: ActionChosen triggers the exit, ResultTargets remains -1
                 ActionChosen = 1; 
                 break;
         }
@@ -664,22 +664,22 @@ void AllyTurn(Group *Allies, Group *Enemies, Unit *CurrentUnit, WINDOW *win) {
         short int ResultTargets[4] = {-1, -1, -1, -1};
             
         switch (Cursor) {
-            case 0: // Strike Action
+            case 0: //Strike Action
                 short int BlowType = CurrentUnit->EquippedWeapon->DamageType;
                 
-                // TODO: Implement the Mixed Damage UI selection here
+                //TODO: Implement the Mixed Damage UI selection here
                 if (BlowType == 2 || BlowType == 3) {
-                    BlowType = 0; // Temporary default to prevent passing 2/3 to ApplyDamage
+                    BlowType = 0; //Temporary default to prevent passing 2/3 to ApplyDamage
                 }
 
                 SelectTargetUI(win, Enemies, 0, ResultTargets);
                 
-                // Check if the user cancelled
+                //Check if the user cancelled
                 if (ResultTargets[0] == -1) {
-                    ActionChosen = 0; // Resets the menu choice, goes back to start of TurnComplete loop
+                    ActionChosen = 0; //Resets the menu choice, goes back to start of TurnComplete loop
                 } else {
                     ApplyDamage(CurrentUnit, ResultTargets, Allies, Enemies, BlowType, win);
-                    TurnComplete = 1; // Ends the turn safely
+                    TurnComplete = 1; //Ends the turn safely
                 }
                 break;
 
@@ -694,14 +694,14 @@ void AllyTurn(Group *Allies, Group *Enemies, Unit *CurrentUnit, WINDOW *win) {
 };
 
 void EnemyTurn(Group *Allies, Group *Enemies,  Unit *CurrentUnit, WINDOW *win){
-    // Clean row 4
+    //Clean row 4
     mvwprintw(win, 4, 23, "                                ");
-    // Print debug message
+    //Print debug message
     mvwprintw(win, 4, 24, "%s skips turn...", CurrentUnit->Name);
     wrefresh(win);
-    // Arbitrary 2 second delay
+    //Arbitrary 2 second delay
     napms(2000); 
-    // Clean up
+    //Clean up
     mvwprintw(win, 4, 23, "                                ");
     wrefresh(win);
 }
@@ -714,10 +714,10 @@ unsigned char Battle(Group* Allies, Group *Enemies, WINDOW *win) {
     unsigned char TotalUnits = AliveAllies + AliveEnemies;
     InitiativeSort(Allies, Enemies, Initiative);
 
-    // Main Battle Loop
+    //Main Battle Loop
     while (AliveAllies > 0 && AliveEnemies > 0) {
         CurrentRound++;
-        // Turn Start
+        //Turn Start
         for (unsigned char i = 0; i < TotalUnits; i++) {
             Unit *CurrentUnit = Initiative[i];
             //Only acts if it's alive
@@ -750,7 +750,7 @@ unsigned char Battle(Group* Allies, Group *Enemies, WINDOW *win) {
     else return 1;
 }
 
-// Debug and Formatting Functions
+//Debug and Formatting Functions
 
 void PrintUnitStats(WINDOW *win, Unit *U, const char **StatNames) {
     wclear(win); 
@@ -861,14 +861,14 @@ void EnforceMinimumSize() {
     refresh();
 }
 
-// Cleans the entire window and draws a new empty border
+//Cleans the entire window and draws a new empty border
 void FormattedCleanWindow(WINDOW *win) {
     wclear(win);
     box(win, 0, 0);
     wrefresh(win);
 }
 
-// Stat Assignment Menu
+//Stat Assignment Menu
 void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
     int Cursor = 0;
     int Points = 30;
@@ -882,9 +882,9 @@ void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
         
         for (int i = 0; i < 6; i++) {
             if (i == Cursor) {
-                mvwprintw(win, 8 + i, 25, "--->"); // Cursor placement
+                mvwprintw(win, 8 + i, 25, "--->");
             }
-            // Using %-4s pads the stat name properly to align the brackets
+
             mvwprintw(win, 8 + i, 32, "[%-4s] %2d", StatNames[i], Stats[i]);
         }
         
@@ -895,14 +895,14 @@ void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
         
         if (ch == KEY_UP || ch == 'w' || ch == 'W') {
             Cursor--;
-            if (Cursor < 0) Cursor = 5; // Wrap to bottom
+            if (Cursor < 0) Cursor = 5; //Wrap to bottom
         } 
         else if (ch == KEY_DOWN || ch == 's' || ch == 'S') {
             Cursor++;
-            if (Cursor > 5) Cursor = 0; // Wrap to top
+            if (Cursor > 5) Cursor = 0; //Wrap to top
         } 
         else if (ch == KEY_LEFT || ch == 'a' || ch == 'A') {
-            int min_val = (Cursor == 2) ? 5 : 0; // FORT is index 2
+            int min_val = (Cursor == 2) ? 5 : 0; //FORT is index 2
             if (Stats[Cursor] > min_val) {
                 Stats[Cursor] = Stats[Cursor] - 5;
                 Points = Points + 5;
@@ -914,7 +914,7 @@ void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
                 Points = Points - 5;
             }
         } 
-        // 10 and 13 are standard ASCII carriage returns/newlines used by Enter keys
+
         else if (ch == '\n' || ch == KEY_ENTER || ch == 10 || ch == 13) {
             if (Points > 0) {
                 mvwprintw(win, 20, 5, "You haven't assigned all Points. Are you sure you want to proceed? (Y/N)");
@@ -924,7 +924,7 @@ void AssignInitialStats(WINDOW *win, int *Stats, const char **StatNames) {
                     break;
                 }
             } else {
-                break; // Proceed normally if 0 Points remain
+                break; //Proceed normally if 0 Points remain
             }
         }
     }
@@ -934,7 +934,7 @@ void TitleScreen(WINDOW *win) {
     FormattedCleanWindow(win);
     mvwprintw(win, 11, 29, "[N]onsense presents...");
     wrefresh(win);
-    napms(1500); // 1.5 second pause
+    napms(1500); //1.5 second pause
     FormattedCleanWindow(win);
 
     const char *TitleArt[] = {
@@ -985,7 +985,7 @@ int main()
     init_pair(1, COLOR_GREEN, COLOR_BLACK); 
     EnforceMinimumSize();
 
-    // 80x24 window
+    //80x24 window
     int StartY = (LINES - 24) / 2;
     int StartX = (COLS - 80) / 2;
     WINDOW *win = newwin(24, 80, StartY, StartX);
@@ -995,12 +995,12 @@ int main()
     TitleScreen(win);
 
     char Name[32] = {'\0'};
-    // 0=ATK, 1=MAG, 2=FORT, 3=DEF, 4=RES, 5=SPD
+    //0=ATK, 1=MAG, 2=FORT, 3=DEF, 4=RES, 5=SPD
     int Stats[6] = {0, 0, 5, 0, 0, 0}; 
     const char *StatNames[] = {"ATK", "MAG", "FORT", "DEF", "RES", "SPD"};
 
     while (Name[0] == '\0') {
-        mvwprintw(win, 4, 2, "                               "); // Cleans the erorr message
+        mvwprintw(win, 4, 2, "                               "); //Cleans the erorr message
         mvwprintw(win, 2, 2, "Type in unit name:");
         wrefresh(win);
         echo();
@@ -1012,16 +1012,16 @@ int main()
         }
     }
 
-    // Menu for Stats
+    //Menu for Stats
     AssignInitialStats(win, Stats, StatNames);
 
-    // ScreenSwap
+    //ScreenSwap
     FormattedCleanWindow(win);
     mvwprintw(win, 2, 2, "============================================================================");
     mvwprintw(win, 3, 2, "Sorry, funny messages were nuked... only for now!");
     wrefresh(win);
     
-    napms(800); // Arbitrary 800 ms wait
+    napms(800); //Arbitrary 800 ms wait
 
     mvwprintw(win, 5, 2, "Mwahahahaha!");
     mvwprintw(win, 6, 2, "============================================================================");
@@ -1050,13 +1050,13 @@ int main()
     PlayerParty.AmountUnits = 1;
     PlayerParty.NumFallenUnits = 0;
     PlayerParty.Type = 0;
-    PlayerParty.Units[0] = &Player; // Pass the memory address of the player
+    PlayerParty.Units[0] = &Player; //Pass the memory address of the player
 
     Group EnemyParty;
     EnemyParty.AmountUnits = 1;
     EnemyParty.NumFallenUnits = 0;
     EnemyParty.Type = 1;
-    EnemyParty.Units[0] = &BadGuy; // Pass the memory address of the enemy
+    EnemyParty.Units[0] = &BadGuy; //Pass the memory address of the enemy
 
     FormattedCleanWindow(win);
     unsigned char BattleResult = Battle(&PlayerParty, &EnemyParty, win);
